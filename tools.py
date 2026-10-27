@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from rich import print
 
+
 tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
 
 @tool
@@ -21,17 +22,42 @@ def web_search(query : str) -> str:
     return "\n----\n".join(out)
     
 
-@tool 
-def scrape_url(url: str)->str:
-    """Scrape and return clean text content from a given URL for deeper reading."""
+
+@tool
+def scrape_url(url: str) -> str:
+    """Fetch a webpage URL and return its cleaned text content."""
+
     try:
-        resp = requests.get(url,timeout=8,headers={"User-Agent":"Mozilla/5.0"})
-        soup = BeautifulSoup(resp.text, "html.parser")
-        for tag in soup(["script","style","nav","footer"]):
+        response = requests.get(
+            url,
+            timeout=15,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        for tag in soup([
+            "script", "style", "nav", "footer",
+            "header", "aside", "noscript"
+        ]):
             tag.decompose()
-        return soup.get_text(separator=" ",strip=True)[:3000]
-    except Exception as e:
-        return f"Could not scrape URL: {str(e)}"
-     
-     
-#print(scrape_url.invoke("https://grow.google/certificates?srsltid=AYCX9vKu0cT-QYY0eeasrWbPIwx-3OOjyX_LVdy5WYETuf7pck8OXHIW"))
+
+        content = soup.get_text(separator=" ", strip=True)
+
+        if not content:
+            return f"SCRAPE_ERROR: No readable text found at {url}"
+
+        return (
+            f"SCRAPE_SUCCESS\n"
+            f"URL: {url}\n"
+            f"PAGE CONTENT:\n{content[:10000]}"
+        )
+
+    except requests.RequestException as exc:
+        return f"SCRAPE_ERROR: Could not fetch {url}: {exc}"
+
+    except Exception as exc:
+        return f"SCRAPE_ERROR: Failed to process {url}: {exc}"
+
